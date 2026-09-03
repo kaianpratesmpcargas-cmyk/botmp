@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP CARGAS - Rastreamento de Cargas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header class="header">
+    <a href="/" class="brand-link">
+        <div class="logo-box">MP</div>
+        <div class="logo-text">MP CARGAS</div>
+    </a>
+    {% if dados %}
+    <a href="/" class="btn-top-action">🔄 Nova Consulta</a>
+    {% else %}
+    <div class="badge-api">BOT READY ⚡ API v1</div>
+    {% endif %}
+</header>
+
+<main class="container">
+
+    {% if not dados %}
+    <!-- TELA INICIAL: FORMULÁRIO DE CONSULTA -->
+    <div class="title">
+        <h1>Rastreamento de Carga</h1>
+        <p>Acompanhe sua encomenda em tempo real informando seu CNPJ ou CPF e os dados do envio.</p>
+    </div>
+
+    <div class="search-card">
+        <form method="POST" action="/" id="form-consulta">
+            <div class="field">
+                <label class="label" for="tipo_consulta">Modalidade de Consulta</label>
+                <select class="input select-custom" id="tipo_consulta" name="tipo_consulta">
+                    <option value="auto" {% if tipo_consulta == 'auto' %}selected{% endif %}>⚡ Busca Automática (Destinatário, Remetente e Pagador)</option>
+                    <option value="destinatario" {% if tipo_consulta == 'destinatario' %}selected{% endif %}>👤 Destinatário (CNPJ)</option>
+                    <option value="pf" {% if tipo_consulta == 'pf' %}selected{% endif %}>👤 Pessoa Física (CPF)</option>
+                    <option value="remetente" {% if tipo_consulta == 'remetente' %}selected{% endif %}>🏢 Remetente (CNPJ)</option>
+                    <option value="pagador" {% if tipo_consulta == 'pagador' %}selected{% endif %}>💳 Pagador do Frete (CNPJ)</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="label" for="documento" id="label-documento">CNPJ ou CPF</label>
+                <input
+                    class="input"
+                    id="documento"
+                    type="text"
+                    name="documento"
+                    maxlength="18"
+                    placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                    value="{{ documento or cnpj }}"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="field-row">
+                <div class="field field-half">
+                    <label class="label" for="criterio">Buscar por</label>
+                    <select class="input select-custom" id="criterio" name="criterio">
+                        <option value="nro_nf" {% if criterio == 'nro_nf' %}selected{% endif %}>Nota Fiscal (NF)</option>
+                        <option value="pedido" {% if criterio == 'pedido' %}selected{% endif %}>Número do Pedido</option>
+                        <option value="chave_nfe" {% if criterio == 'chave_nfe' %}selected{% endif %}>Chave da NF-e (44 dígitos)</option>
+                        <option value="nro_coleta" {% if criterio == 'nro_coleta' %}selected{% endif %}>Número da Coleta</option>
+                    </select>
+                </div>
+
+                <div class="field field-half">
+                    <label class="label" for="valor_busca" id="label-valor-busca">Número do Documento</label>
+                    <input
+                        class="input"
+                        id="valor_busca"
+                        type="text"
+                        name="valor_busca"
+                        placeholder="Ex: 4224761"
+                        value="{{ valor_busca or nro_nf }}"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label" for="senha">
+                    Senha <span class="optional">(opcional - preencha somente se exigido pela transportadora)</span>
+                </label>
+                <input
+                    class="input"
+                    id="senha"
+                    type="password"
+                    name="senha"
+                    placeholder="Deixe em branco caso não possua"
+                >
+            </div>
+
+            <button class="button" type="submit" id="btn-submit">
+                <span id="btn-text">🔍 RASTREAR CARGA</span>
+            </button>
+        </form>
+    </div>
+
+    {% if erro %}
+    <div class="error">
+        <strong>Atenção:</strong> {{ erro }}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- TELA DE RESULTADOS: FOCO TOTAL NA CARGA -->
+    <div class="result-header">
+        <div class="result-badges">
+            {% if dados.info.nf and dados.info.nf != "Não informado" %}
+            <span class="badge-pill">NF: <strong>{{ dados.info.nf }}</strong></span>
+            {% elif dados.info.pedido and dados.info.pedido != "Não informado" %}
+            <span class="badge-pill">Pedido: <strong>{{ dados.info.pedido }}</strong></span>
+            {% endif %}
+            <span class="badge-pill">{{ dados.info.tipo_documento }}: <strong>{{ dados.info.documento }}</strong></span>
+            <span class="badge-pill modalidade">Modalidade: <strong>{{ dados.info.tipo_consulta }}</strong></span>
+            {% if dados.info.comprovante %}
+            <span class="badge-pill badge-comprovante">✅ Comprovante de Entrega Disponível</span>
+            {% endif %}
+        </div>
+        <a href="/" class="btn-nova-consulta">🔍 Rastrear Outra Carga</a>
+    </div>
+
+    <div class="result">
+
+        <!-- CARD STATUS PRINCIPAL -->
+        <div class="status-card">
+            <div class="status-label">Status Atual da Carga</div>
+            <div class="status-title">
+                <span>{{ dados.ultima.emoji }}</span>
+                <span>{{ dados.ultima.status_amigavel }}</span>
+            </div>
+            <div class="status-info">
+                📍 {{ dados.ultima.cidade or dados.ultima.filial }} &nbsp; • &nbsp; 📅 {{ dados.ultima.data_formatada }}
+            </div>
+            {% if dados.ultima.descricao %}
+            <div class="status-description">
+                {{ dados.ultima.descricao }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- CARD DADOS DA CARGA -->
+        <div class="card">
+            <div class="card-title">Detalhes da Carga</div>
+            <div class="grid">
+                <div class="item">
+                    <div class="item-label">Nota Fiscal</div>
+                    <div class="item-value">{{ dados.info.nf }}</div>
+                </div>
+
+                <div class="item">
+                    <div class="item-label">{{ dados.info.tipo_documento }}</div>
+                    <div class="item-value">{{ dados.info.documento }}</div>
+                </div>
+
+                <div class="item">
+                    <div class="item-label">Destinatário</div>
+                    <div class="item-value">{{ dados.info.destinatario }}</div>
+                </div>
+
+                <div class="item">
+                    <div class="item-label">Remetente</div>
+                    <div class="item-value">{{ dados.info.remetente }}</div>
+                </div>
+
+                {% if dados.info.pagador and dados.info.pagador != "Não informado" %}
+                <div class="item">
+                    <div class="item-label">Pagador do Frete</div>
+                    <div class="item-value">{{ dados.info.pagador }}</div>
+                </div>
+                {% endif %}
+
+                <div class="item">
+                    <div class="item-label">Pedido</div>
+                    <div class="item-value">{{ dados.info.pedido }}</div>
+                </div>
+
+
+                <div class="item">
+                    <div class="item-label">Previsão de entrega</div>
+                    <div class="item-value highlight">{{ dados.info.previsao }}</div>
+                </div>
+
+                <div class="item">
+                    <div class="item-label">Origem</div>
+                    <div class="item-value">{{ dados.info.origem }}</div>
+                </div>
+
+                <div class="item">
+                    <div class="item-label">Destino</div>
+                    <div class="item-value">{{ dados.info.destino }}</div>
+                </div>
+
+                {% if dados.info.nro_coleta and dados.info.nro_coleta != "Não informado" %}
+                <div class="item">
+                    <div class="item-label">Número da Coleta</div>
+                    <div class="item-value">{{ dados.info.nro_coleta }}</div>
+                </div>
+                {% endif %}
+
+                {% if dados.info.ctrc and dados.info.ctrc != "Não informado" %}
+                <div class="item">
+                    <div class="item-label">CTRC / Conhecimento</div>
+                    <div class="item-value">{{ dados.info.ctrc }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- CARD TIMELINE -->
+        <div class="card">
+            <div class="card-title">Histórico de Movimentações</div>
+            <div class="timeline">
+                {% for evento in dados.tracking %}
+                <div class="event">
+                    <div class="dot"></div>
+                    <div class="event-date">{{ evento.data_formatada }}</div>
+                    <div class="event-title">{{ evento.emoji }} {{ evento.status_amigavel }}</div>
+                    <div class="event-city">{{ evento.cidade or evento.filial }}</div>
+                    <div class="event-description">{{ evento.descricao }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- BOTÃO PARA NOVA CONSULTA -->
+        <div class="action-footer">
+            <a href="/" class="button btn-footer-nova">🔍 FAZER NOVA CONSULTA</a>
+        </div>
+
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        MP AGENTE DE CARGAS LTDA • Sistema integrado às WebAPIs SSW (Destinatário, Pagador, Pessoa Física e Remetente)
+    </div>
+
+</main>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

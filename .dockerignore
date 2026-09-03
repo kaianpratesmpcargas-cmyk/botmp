@@ -1,0 +1,10 @@
+node_modules
+bot-whatsapp/node_modules
+__pycache__
+*.pyc
+.env
+.git
+auth_info
+bot-whatsapp/auth_info
+auth_info_baileys
+.vscode
