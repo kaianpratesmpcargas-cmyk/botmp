@@ -4,7 +4,6 @@ const {
     DisconnectReason
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const fs = require('fs');
 
@@ -13,47 +12,54 @@ const portaAPI = process.env.PORT || 5000;
 const API_PYTHON_URL = `http://127.0.0.1:${portaAPI}/api/v1/bot/consulta`;
 
 async function iniciarBot() {
-    console.log("\nIniciando sistema de conexão WhatsApp (Baileys) [Modo Normal]...");
+    console.log("\nIniciando sistema de conexão WhatsApp (Baileys) [Pairing Code Mode]...");
 
-    // Salva a sessão na pasta 'auth_info' para persistir e não precisar escanear toda vez
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
     const sock = makeWASocket({
         auth: state,
-        logger: pino({ level: 'silent' }), // Oculta logs internos para manter o terminal limpo
-        printQRInTerminal: false,
-        // O browser precisa ser setado para funcionar o Pairing Code corretamente
+        logger: pino({ level: 'silent' }),
         browser: ['Ubuntu', 'Chrome', '20.0.04']
     });
 
-    if (!sock.authState.creds.registered && process.env.WHATSAPP_NUMBER) {
-        // Remove qualquer caractere não numérico
-        let phoneNumber = process.env.WHATSAPP_NUMBER.replace(/[^0-9]/g, '');
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(phoneNumber);
-                console.log("\n============================================================");
-                console.log("   🔑 CÓDIGO DE PAREAMENTO DO WHATSAPP:");
-                console.log(`   👉 ${code} 👈`);
-                console.log("   (Vá no WhatsApp > Aparelhos Conectados > Conectar usando número)");
-                console.log("============================================================\n");
-            } catch (err) {
-                console.error("Erro ao gerar código de pareamento:", err.message);
-            }
-        }, 3000);
+    // Solicita o Pairing Code apenas uma vez, quando não há sessão salva
+    if (!state.creds.registered) {
+        const numero = process.env.WHATSAPP_NUMBER;
+        if (!numero) {
+            console.error("[ERRO FATAL] Variável de ambiente WHATSAPP_NUMBER não definida.");
+            console.error("Defina WHATSAPP_NUMBER no Render com o número no formato: 5571999999999");
+            process.exit(1);
+        }
+
+        const numeroLimpo = numero.replace(/[^0-9]/g, '');
+        console.log(`[INFO] Número configurado: ${numeroLimpo}`);
+        console.log("[INFO] Aguardando conexão com o servidor WhatsApp para solicitar Pairing Code...");
+
+        // Aguarda a conexão inicial antes de solicitar o código
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        try {
+            const code = await sock.requestPairingCode(numeroLimpo);
+            console.log("\n============================================================");
+            console.log("              CÓDIGO DE PAREAMENTO WHATSAPP");
+            console.log("============================================================");
+            console.log("");
+            console.log(`                   ${code}`);
+            console.log("");
+            console.log("============================================================");
+            console.log(" No WhatsApp do celular:");
+            console.log(" Configurações > Aparelhos conectados > Conectar aparelho");
+            console.log(" > Conectar com número de telefone");
+            console.log("============================================================\n");
+        } catch (err) {
+            console.error("[ERRO] Falha ao gerar Pairing Code:", err.message);
+        }
     }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr && !process.env.WHATSAPP_NUMBER) {
-            console.log("\n============================================================");
-            console.log("   ESCANEIE O QR CODE ABAIXO COM O SEU WHATSAPP:");
-            console.log("============================================================\n");
-            qrcode.generate(qr, { small: true });
-        }
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
@@ -75,7 +81,6 @@ async function iniciarBot() {
             console.log("============================================================\n");
         }
     });
-
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
