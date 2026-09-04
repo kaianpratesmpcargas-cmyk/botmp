@@ -21,15 +21,34 @@ async function iniciarBot() {
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }), // Oculta logs internos para manter o terminal limpo
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        // O browser precisa ser setado para funcionar o Pairing Code corretamente
+        browser: ['Ubuntu', 'Chrome', '20.0.04']
     });
+
+    if (!sock.authState.creds.registered && process.env.WHATSAPP_NUMBER) {
+        // Remove qualquer caractere não numérico
+        let phoneNumber = process.env.WHATSAPP_NUMBER.replace(/[^0-9]/g, '');
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log("\n============================================================");
+                console.log("   🔑 CÓDIGO DE PAREAMENTO DO WHATSAPP:");
+                console.log(`   👉 ${code} 👈`);
+                console.log("   (Vá no WhatsApp > Aparelhos Conectados > Conectar usando número)");
+                console.log("============================================================\n");
+            } catch (err) {
+                console.error("Erro ao gerar código de pareamento:", err.message);
+            }
+        }, 3000);
+    }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
+        if (qr && !process.env.WHATSAPP_NUMBER) {
             console.log("\n============================================================");
             console.log("   ESCANEIE O QR CODE ABAIXO COM O SEU WHATSAPP:");
             console.log("============================================================\n");
